@@ -1,17 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 
-const AddUpdate = ({ token }) => {
+const UpdateProject = ({ token }) => {
     const { id: projectId } = useParams();
+    const navigate = useNavigate();
     const [content, setContent] = useState('');
-    const [studentNote, setStudentNote] = useState('');
-    const [success, setSuccess] = useState(false);
-    const [error, setError] = useState(null);
+    const [user, setUser] = useState(null);
+
+    useEffect(() => {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+            setUser(JSON.parse(storedUser));
+        }
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setError(null);
-        setSuccess(false);
+
+        if (!user) {
+            alert('User not found.');
+            return;
+        }
+
+        const newUpdate = {
+            project_id: parseInt(projectId), // ✅ Make sure it's an integer
+            content: content.trim(),
+            submitted_by: user.id,
+        };
 
         try {
             const res = await fetch('http://localhost:8055/items/update', {
@@ -20,48 +35,41 @@ const AddUpdate = ({ token }) => {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify({
-                    content,
-                    project: projectId,
-                    student_note: studentNote,
-                }),
+                body: JSON.stringify(newUpdate),
             });
 
-            if (!res.ok) throw new Error('Failed to add update');
+            const data = await res.json();
 
-            setSuccess(true);
-            setContent('');
-            setStudentNote('');
+            if (!res.ok) {
+                console.error('Directus Error:', data);
+                throw new Error(data?.errors?.[0]?.message || 'Unknown error');
+            }
+
+            navigate(`/projects/${projectId}`);
         } catch (err) {
-            setError(err.message);
+            alert('Update submission failed: ' + err.message);
+            console.error('Error:', err);
         }
     };
 
     return (
-        <div className="p-4 max-w-xl mx-auto">
-            <h2 className="text-xl font-bold mb-4">Add Update</h2>
-            {success && <p className="text-green-600 mb-2">Update added successfully!</p>}
-            {error && <p className="text-red-600 mb-2">{error}</p>}
-            <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="p-4">
+            <h2 className="text-lg font-bold mb-2">Submit a Progress Update</h2>
+            <form onSubmit={handleSubmit}>
                 <textarea
+                    className="w-full border rounded p-2 mb-4"
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
-                    placeholder="Update content"
-                    className="w-full border p-2 h-24"
+                    rows="5"
+                    placeholder="Write your progress update here..."
                     required
                 />
-                <textarea
-                    value={studentNote}
-                    onChange={(e) => setStudentNote(e.target.value)}
-                    placeholder="Student note (optional)"
-                    className="w-full border p-2 h-16"
-                />
-                <button type="submit" className="bg-blue-500 text-white px-4 py-2 rounded">
-                    Submit Update
+                <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">
+                    Submit
                 </button>
             </form>
         </div>
     );
 };
 
-export default AddUpdate;
+export default UpdateProject;

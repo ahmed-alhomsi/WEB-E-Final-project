@@ -1,13 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 
 const ProjectDetails = ({ token }) => {
     const { id } = useParams();
     const [project, setProject] = useState(null);
-    const user = JSON.parse(localStorage.getItem('user'));
+    const [updates, setUpdates] = useState([]);
+    const [user, setUser] = useState(null);
+
+    const [finalEvaluation, setFinalEvaluation] = useState('');
 
     useEffect(() => {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+            setUser(JSON.parse(storedUser));
+        }
+    }, []);
+
+    useEffect(() => {
+        // Fetch the project itself
         fetch(`http://localhost:8055/items/project/${id}`, {
             headers: { Authorization: `Bearer ${token}` },
         })
@@ -17,7 +27,38 @@ const ProjectDetails = ({ token }) => {
             })
             .then(data => setProject(data.data))
             .catch(err => console.error(err));
+
+        // Fetch related updates
+        fetch(`http://localhost:8055/items/update?filter[project_id][_eq]=${id}&sort=-date_created`, {
+            headers: { Authorization: `Bearer ${token}` },
+        })
+            .then(res => {
+                if (!res.ok) throw new Error('Failed to fetch updates');
+                return res.json();
+            })
+            .then(data => setUpdates(data.data))
+            .catch(err => console.error(err));
     }, [id, token]);
+
+    const handleEvaluationSubmit = () => {
+        fetch(`http://localhost:8055/items/project/${id}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ final_evaluation: finalEvaluation }),
+        })
+            .then(res => {
+                if (!res.ok) throw new Error('Failed to submit evaluation');
+                return res.json();
+            })
+            .then(data => {
+                alert('Evaluation submitted!');
+                setProject(prev => ({ ...prev, final_evaluation: finalEvaluation }));
+            })
+            .catch(err => console.error(err));
+    };
 
     if (!project) return <p>Loading...</p>;
 
@@ -25,95 +66,104 @@ const ProjectDetails = ({ token }) => {
         <div className="p-4">
             <h1 className="text-xl font-bold mb-2">{project.title}</h1>
             <p><strong>Description:</strong> {project.description}</p>
-            <p><strong>Date added:</strong> {project.date_created}</p>
+            <p><strong>Date added:</strong> {new Date(project.date_created).toLocaleString()}</p>
             <p><strong>Summary:</strong> {project.idea_summary}</p>
             <p><strong>Status:</strong> {project.status}</p>
+
+
+
+            {user?.role?.name === 'committee_head' && (
+                <div className="mt-4">
+                    <label className="block font-semibold mb-1">Change Project Status:</label>
+                    <select
+                        value={project.status}
+                        onChange={async (e) => {
+                            const newStatus = e.target.value;
+
+                            try {
+                                const res = await fetch(`http://localhost:8055/items/project/${project.id}`, {
+                                    method: 'PATCH',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        Authorization: `Bearer ${token}`,
+                                    },
+                                    body: JSON.stringify({ status: newStatus }),
+                                });
+
+                                if (!res.ok) throw new Error('Failed to update status');
+
+                                // Update local state
+                                setProject(prev => ({ ...prev, status: newStatus }));
+                            } catch (err) {
+                                console.error(err);
+                                alert('Could not update project status.');
+                            }
+                        }}
+                        className="border p-2 rounded"
+                    >
+                        <option value="pending">Pending</option>
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                        <option value="completed">completed</option>
+                    </select>
+                </div>
+            )}
+
+
+
+
+
+
             <p><strong>Student Notes:</strong> {project.student_notes}</p>
-            <p><strong>Supervisor:</strong> {project.project_supervisor}</p>
             <p><strong>Supervisor Notes:</strong> {project.supervisor_notes}</p>
-            <p><strong>Committee Head:</strong> {project.committee_head}</p>
             <p><strong>Final Evaluation:</strong> {project.final_evaluation}</p>
-            {/* {user?.role === 'student' && (
-                <li key={project.id} className="border p-2 rounded">
-                    <Link to={`/projects/${project.id}/update`}>Add update</Link>
+            {user?.role?.name === 'committee_head' && (
+                <div className="mt-4">
+                    <label htmlFor="final_evaluation" className="block font-semibold mb-1">Final Evaluation (out of 100):</label>
+                    <input
+                        type="number"
+                        id="final_evaluation"
+                        value={finalEvaluation}
+                        onChange={(e) => setFinalEvaluation(e.target.value)}
+                        className="border px-2 py-1 rounded w-24"
+                    />
+                    <button
+                        onClick={handleEvaluationSubmit}
+                        className="ml-2 bg-green-600 text-white px-4 py-1 rounded hover:bg-green-700"
+                    >
+                        Submit Grade
+                    </button>
+                </div>
+            )}
+
+
+            {user?.role?.name === 'student' && (
+                <li key={project.id} className="border p-2 rounded mt-4">
+                    <Link to={`/projects/${project.id}/update`} className="text-blue-600 hover:underline">
+                        Add update
+                    </Link>
                 </li>
-            )} */}
+            )}
+
+            <div className="mt-6">
+                <h2 className="text-lg font-semibold mb-2">Progress Updates</h2>
+                {updates.length === 0 ? (
+                    <p>No updates submitted yet.</p>
+                ) : (
+                    <ul className="space-y-3">
+                        {updates.map((update) => (
+                            <li key={update.id} className="border p-3 rounded bg-gray-100">
+                                <p>{update.content}</p>
+                                <p className="text-sm text-gray-600 mb-1">
+                                    Submitted on {new Date(update.date_created).toLocaleString()}
+                                </p>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
         </div>
     );
 };
 
 export default ProjectDetails;
-
-
-
-
-
-// import React, { useEffect, useState } from 'react';
-// import { useParams } from 'react-router-dom';
-
-// const ProjectDetails = ({ token }) => {
-//     const { id } = useParams();
-//     const [project, setProject] = useState(null);
-
-//     useEffect(() => {
-//         const fetchProjectDetails = async () => {
-//             try {
-//                 const res = await fetch(`http://localhost:8055/items/project/${id}`, {
-//                     headers: { Authorization: `Bearer ${token}` },
-//                 });
-
-//                 if (!res.ok) throw new Error('Failed to fetch project');
-
-//                 const projectData = await res.json();
-//                 const project = projectData.data;
-
-//                 // Fetch supervisor and committee head user data
-//                 const [supervisorRes, committeeRes] = await Promise.all([
-//                     fetch(`http://localhost:8055/users/${project.project_supervisor}`, {
-//                         headers: { Authorization: `Bearer ${token}` },
-//                     }),
-//                     fetch(`http://localhost:8055/users/${project.committee_head}`, {
-//                         headers: { Authorization: `Bearer ${token}` },
-//                     }),
-//                 ]);
-
-//                 if (!supervisorRes.ok || !committeeRes.ok) throw new Error('Failed to fetch user data');
-
-//                 const [supervisorData, committeeData] = await Promise.all([
-//                     supervisorRes.json(),
-//                     committeeRes.json(),
-//                 ]);
-
-//                 // Add names to the project object
-//                 setProject({
-//                     ...project,
-//                     project_supervisor_name: `${supervisorData.first_name} ${supervisorData.last_name}`,
-//                     committee_head_name: `${committeeData.first_name} ${committeeData.last_name}`,
-//                 });
-//             } catch (err) {
-//                 console.error(err);
-//             }
-//         };
-
-//         fetchProjectDetails();
-//     }, [id, token]);
-
-//     if (!project) return <p>Loading...</p>;
-
-//     return (
-//         <div className="p-4">
-//             <h1 className="text-xl font-bold mb-2">{project.title}</h1>
-//             <p><strong>Description:</strong> {project.description}</p>
-//             <p><strong>Date added:</strong> {project.date_created}</p>
-//             <p><strong>Summary:</strong> {project.idea_summary}</p>
-//             <p><strong>Status:</strong> {project.status}</p>
-//             <p><strong>Student Notes:</strong> {project.student_notes}</p>
-//             <p><strong>Supervisor:</strong> {project.project_supervisor_name}</p>
-//             <p><strong>Supervisor Notes:</strong> {project.supervisor_notes}</p>
-//             <p><strong>Committee Head:</strong> {project.committee_head_name}</p>
-//             <p><strong>Final Evaluation:</strong> {project.final_evaluation}</p>
-//         </div>
-//     );
-// };
-
-// export default ProjectDetails;
