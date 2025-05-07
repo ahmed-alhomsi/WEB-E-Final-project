@@ -7,6 +7,9 @@ const ProjectDetails = ({ token }) => {
     const [updates, setUpdates] = useState([]);
     const [user, setUser] = useState(null);
 
+    const [supervisors, setSupervisors] = useState([]);
+
+
     const [finalEvaluation, setFinalEvaluation] = useState('');
 
     useEffect(() => {
@@ -39,6 +42,23 @@ const ProjectDetails = ({ token }) => {
             .then(data => setUpdates(data.data))
             .catch(err => console.error(err));
     }, [id, token]);
+
+
+
+
+    useEffect(() => {
+        if (user?.role?.name === 'committee_head') {
+            fetch('http://localhost:8055/users?filter[role][name][_eq]=supervisor&fields=id,first_name,last_name', {
+                headers: { Authorization: `Bearer ${token}` },
+            })
+                .then(res => res.json())
+                .then(data => setSupervisors(data.data))
+                .catch(err => console.error('Failed to fetch supervisors', err));
+        }
+    }, [user, token]);
+
+
+
 
     const handleEvaluationSubmit = () => {
         fetch(`http://localhost:8055/items/project/${id}`, {
@@ -114,8 +134,88 @@ const ProjectDetails = ({ token }) => {
 
 
 
+            <p><strong>Committee Head:</strong> {project.committee_head}</p>
+
+
             <p><strong>Student Notes:</strong> {project.student_notes}</p>
             <p><strong>Supervisor Notes:</strong> {project.supervisor_notes}</p>
+
+
+
+
+
+
+
+
+
+
+            {project.project_supervisor && (
+                <p className="mt-1 text-sm text-gray-600">
+                    Currently assigned to: {
+                        supervisors.find(s => s.id === project.project_supervisor)?.first_name
+                    } {
+                        supervisors.find(s => s.id === project.project_supervisor)?.last_name
+                    }
+                </p>
+            )}
+
+
+
+
+
+
+
+
+
+            {user?.role?.name === 'committee_head' && (
+                <div className="mt-4">
+                    <label className="block font-semibold mb-1">Assign Supervisor:</label>
+                    <select
+                        value={project.project_supervisor || ''}
+                        onChange={(e) => {
+                            const supervisorId = e.target.value;
+
+                            fetch(`http://localhost:8055/items/project/${project.id}`, {
+                                method: 'PATCH',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    Authorization: `Bearer ${token}`,
+                                },
+                                body: JSON.stringify({ project_supervisor: supervisorId }),
+                            })
+                                .then(res => {
+                                    if (!res.ok) throw new Error('Failed to assign supervisor');
+                                    return res.json();
+                                })
+                                .then(() => {
+                                    alert('Supervisor assigned!');
+                                    setProject(prev => ({ ...prev, project_supervisor: supervisorId }));
+                                })
+                                .catch(err => {
+                                    console.error(err);
+                                    alert('Error assigning supervisor');
+                                });
+                        }}
+                        className="border p-2 rounded w-64"
+                    >
+                        <option value="">-- Select Supervisor --</option>
+                        {supervisors.map(s => (
+                            <option key={s.id} value={s.id}>
+                                {s.first_name} {s.last_name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            )}
+
+
+
+
+
+
+
+
+
             <p><strong>Final Evaluation:</strong> {project.final_evaluation}</p>
             {user?.role?.name === 'committee_head' && (
                 <div className="mt-4">
