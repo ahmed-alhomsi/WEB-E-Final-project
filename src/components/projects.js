@@ -3,23 +3,40 @@
 
 // const Projects = ({ user, token, onLogout }) => {
 //     const [projects, setProjects] = useState([]);
+//     const [userDetails, setUserDetails] = useState(null);
 
 //     useEffect(() => {
-//         fetch('http://localhost:8055/items/project', {
-//             headers: { Authorization: `Bearer ${token}` },
-//         })
-//             .then(res => {
-//                 if (!res.ok) throw new Error('Failed to load projects');
-//                 return res.json();
+//         if (token) {
+//             // Fetch user details
+//             fetch('http://localhost:8055/users/me', {
+//                 headers: { Authorization: `Bearer ${token}` },
 //             })
-//             .then(data => setProjects(data.data))
-//             .catch(err => console.error(err));
+//                 .then(res => {
+//                     if (!res.ok) throw new Error('Failed to fetch user');
+//                     return res.json();
+//                 })
+//                 .then(data => setUserDetails(data.data))
+//                 .catch(err => console.error(err));
+
+//             // Fetch projects
+//             fetch('http://localhost:8055/items/project', {
+//                 headers: { Authorization: `Bearer ${token}` },
+//             })
+//                 .then(res => {
+//                     if (!res.ok) throw new Error('Failed to load projects');
+//                     return res.json();
+//                 })
+//                 .then(data => setProjects(data.data))
+//                 .catch(err => console.error(err));
+//         }
 //     }, [token]);
 
 //     return (
 //         <div className="p-4">
 //             <div className="flex justify-between items-center mb-4">
-//                 <h1 className="text-xl font-bold">Welcome, {user?.first_name || 'User'}</h1>
+//                 <h1 className="text-xl font-bold">
+//                     Welcome, {userDetails?.first_name || user?.first_name || 'User'}
+//                 </h1>
 //                 <button className="bg-red-500 text-white px-3 py-1" onClick={onLogout}>Logout</button>
 //             </div>
 //             <h2 className="text-lg mb-2">Your Projects</h2>
@@ -46,29 +63,42 @@ const Projects = ({ user, token, onLogout }) => {
     const [userDetails, setUserDetails] = useState(null);
 
     useEffect(() => {
-        if (token) {
-            // Fetch user details
-            fetch('http://localhost:8055/users/me', {
-                headers: { Authorization: `Bearer ${token}` },
-            })
-                .then(res => {
-                    if (!res.ok) throw new Error('Failed to fetch user');
-                    return res.json();
-                })
-                .then(data => setUserDetails(data.data))
-                .catch(err => console.error(err));
+        if (!token) return;
 
-            // Fetch projects
-            fetch('http://localhost:8055/items/project', {
-                headers: { Authorization: `Bearer ${token}` },
-            })
-                .then(res => {
-                    if (!res.ok) throw new Error('Failed to load projects');
-                    return res.json();
+        fetch('http://localhost:8055/users/me?fields=*,role.id,role.name', {
+            headers: { Authorization: `Bearer ${token}` },
+        })
+            .then(res => res.json())
+            .then(data => {
+                const userData = data.data;
+                setUserDetails(userData);
+
+                fetch('http://localhost:8055/items/project?fields=*,user_created.id,project_supervisor.id', {
+                    headers: { Authorization: `Bearer ${token}` },
                 })
-                .then(data => setProjects(data.data))
-                .catch(err => console.error(err));
-        }
+                    .then(res => res.json())
+                    .then(data => {
+                        const allProjects = data.data;
+                        const role = userData.role?.name;
+                        let filtered = [];
+
+                        if (role === 'student') {
+                            filtered = allProjects.filter(
+                                p => p.user_created?.id === userData.id
+                            );
+                        } else if (role === 'supervisor') {
+                            filtered = allProjects.filter(
+                                p => p.project_supervisor?.id === userData.id
+                            );
+                        } else if (role === 'committee_head') {
+                            filtered = allProjects;
+                        }
+
+                        setProjects(filtered);
+                    })
+                    .catch(err => console.error('Error fetching projects:', err));
+            })
+            .catch(err => console.error('Error fetching user details:', err));
     }, [token]);
 
     return (
@@ -77,16 +107,22 @@ const Projects = ({ user, token, onLogout }) => {
                 <h1 className="text-xl font-bold">
                     Welcome, {userDetails?.first_name || user?.first_name || 'User'}
                 </h1>
-                <button className="bg-red-500 text-white px-3 py-1" onClick={onLogout}>Logout</button>
+                <button className="bg-red-500 text-white px-3 py-1" onClick={onLogout}>
+                    Logout
+                </button>
             </div>
             <h2 className="text-lg mb-2">Your Projects</h2>
-            <ul className="space-y-2">
-                {projects.map(project => (
-                    <li key={project.id} className="border p-2 rounded">
-                        <Link to={`/projects/${project.id}`}>{project.title}</Link>
-                    </li>
-                ))}
-            </ul>
+            {projects.length === 0 ? (
+                <p className="text-gray-600">No projects to display.</p>
+            ) : (
+                <ul className="space-y-2">
+                    {projects.map(project => (
+                        <li key={project.id} className="border p-2 rounded">
+                            <Link to={`/projects/${project.id}`}>{project.title}</Link>
+                        </li>
+                    ))}
+                </ul>
+            )}
         </div>
     );
 };
