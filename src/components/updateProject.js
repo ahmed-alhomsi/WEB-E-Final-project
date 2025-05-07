@@ -23,7 +23,7 @@ const UpdateProject = ({ token }) => {
         }
 
         const newUpdate = {
-            project_id: parseInt(projectId), // ✅ Make sure it's an integer
+            project_id: parseInt(projectId),
             content: content.trim(),
             submitted_by: user.id,
         };

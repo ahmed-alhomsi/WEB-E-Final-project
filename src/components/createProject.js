@@ -8,7 +8,7 @@ const CreateProjectPage = ({ token, studentId }) => {
         idea_summary: '',
         description: '',
         student_notes: '',
-        student: studentId || '', // adjust this based on your schema
+        student: studentId || '',
     });
 
     const [error, setError] = useState(null);
@@ -36,7 +36,7 @@ const CreateProjectPage = ({ token, studentId }) => {
 
             const result = await res.json();
             setSuccess(true);
-            navigate(`/projects/${result.data.id}`); // redirect to the new project page
+            navigate(`/projects/${result.data.id}`);
         } catch (err) {
             console.error(err);
             setError('Failed to create project. Please try again.');
